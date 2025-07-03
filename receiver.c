@@ -41,6 +41,10 @@ static boolean avg_week_done = false;
 static boolean avg_month_done = false;
 static boolean avg_year_done = false;
 
+char week_average[64];
+char month_average[64];
+
+
 
 void setup() {
   Serial.begin(115200); 
@@ -146,8 +150,12 @@ void get_last_n_dates(tm current, int n, String out[]) {
 
 String get_AVG_line_from_file(String path) {
   File file = SD.open(path);
-  if (!file) return "";
-
+  if (!file) {
+    Serial.print("Failed to open file: ");
+    Serial.println(path);
+    return "";
+  }
+  
   String line;
   String avgLine = "";
   while (file.available()) {
@@ -277,6 +285,31 @@ String getLastLineOfTodayFile() {
 }
 
 
+
+String get_avg(String period, String time_value) {
+  File file;
+  String line;
+
+  if (time_value == "week") {
+    file = SD.open("/weeks_average.txt");
+  } else if (time_value == "month") {
+    file = SD.open("/months_average.txt");
+  } else {
+    return "404 not found";
+  }
+  if (!file) return "";
+  String avgLine = "";
+  while (file.available()) {
+    line = file.readStringUntil('\n');
+    if (line.indexOf(period) != -1) {
+      avgLine = line;
+    }
+  }
+  file.close();
+  return avgLine;
+}
+
+
 void loop() {
   //////////////////////////////////////////
   /////////////// WIFI/TIME ////////////////
@@ -298,17 +331,43 @@ void loop() {
   //////////////////////////////////////////
   /////////////// BLUETOOTH ////////////////
   //////////////////////////////////////////
-
   if (SerialBT.available()) {
     String cmd = SerialBT.readStringUntil('\n');
     cmd.trim();
 
     if (cmd == "GET /last") {
-      String lastLine = getLastLineOfTodayFile();
-      SerialBT.println(lastLine);
-    } else if (cmd == "GET /last") {
+      String last_line = getLastLineOfTodayFile();
+      SerialBT.println(last_line);
       
-    } else {
+    } else if (cmd.startsWith("GET /avg/day")) {
+      String date = cmd.substring(12);
+      String file_name = date + ".txt";
+      String day_avg = get_AVG_line_from_file(file_name);
+      if (day_avg != "") {
+        SerialBT.println(day_avg);
+      } else {
+        SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
+      }
+      
+    } else if (cmd.startsWith("GET /avg/week")) {
+      String week = cmd.substring(14);
+      String week_avg = get_avg(week, "week");
+      if (week_avg != "") {
+        SerialBT.println(week_avg);
+      } else {
+        SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
+      }
+      
+    } else if (cmd.startsWith("GET /avg/month")) {
+      String month = cmd.substring(15);
+      String month_avg = get_avg(month, "month");
+      if (month_avg != "") {
+        SerialBT.println(month_avg);
+      } else {
+        SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
+      }  
+
+   } else {
       SerialBT.println("404 Not Found");
     }
   }
@@ -333,7 +392,7 @@ void loop() {
     } else {
       Serial.println("Failed to open file for appending");
     }
-  }
+  } 
   if (timeinfo.tm_hour != 23) avg_day_done = false;
 
 
@@ -343,19 +402,20 @@ void loop() {
     strftime(weekStr, sizeof(weekStr), "%Y-W%V", &timeinfo);
     
     String avgStr = calculate_average(7);
-    char week_average[64];
+    //char week_average[64];
     snprintf(week_average, sizeof(week_average), "%s %s", weekStr, avgStr.c_str());
     
     File file = SD.open("/weeks_average.txt", FILE_APPEND);
     if (file) {
       file.println(week_average);
       file.flush();
-      file.close();
       Serial.println("wrote weeks average");
       avg_week_done = true;
     } else {
       Serial.println("Failed to open file for appending");
     }
+    file.close();
+
   }
   if (timeinfo.tm_wday != 0) avg_week_done = false;
 
@@ -369,48 +429,20 @@ void loop() {
     strftime(monthStr, sizeof(monthStr), "%Y-%m", &lastMonth);
     
     String avgStr = calculate_average(29);
-    char month_average[64];
     snprintf(month_average, sizeof(month_average), "%s %s", monthStr, avgStr.c_str());
     
     File file = SD.open("/months_average.txt", FILE_APPEND);
     if (file) {
       file.println(month_average);
       file.flush();
-      file.close();
       Serial.println("wrote months average");
       avg_month_done = true;
     } else {
       Serial.println("Failed to open file for appending");
-    }
+    }      
+    file.close();
   }
   if (timeinfo.tm_mday != 1) avg_month_done = false;
-
-  
-  // YEAR AVERAGE
-  if (timeinfo.tm_mon == 0 && !avg_year_done) {
-    tm lastYear = timeinfo;
-    lastYear.tm_year -= 1; // aller à l'année précédente
-    mktime(&lastYear);
-    
-    char yearStr[16];
-    strftime(yearStr, sizeof(yearStr), "%Y", &lastYear);
-    
-    String avgStr = calculate_average(365);
-    char year_average[64];
-    snprintf(year_average, sizeof(year_average), "%s %s", yearStr, avgStr.c_str());
-    
-    File file = SD.open("/years_average.txt", FILE_APPEND);
-    if (file) {
-      file.println(year_average);
-      file.flush();
-      file.close();
-      Serial.println("wrote years average");
-      avg_year_done = true;
-    } else {
-      Serial.println("Failed to open file for appending");
-    }
-  }
-  if (timeinfo.tm_mon != 0) avg_year_done = false;
   
 
   delay(1000); // Avoid spamming the Serial Monitor
