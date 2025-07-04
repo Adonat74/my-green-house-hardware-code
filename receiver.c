@@ -309,6 +309,32 @@ String get_avg(String period, String time_value) {
   return avgLine;
 }
 
+String get_file_all_lines(String file_name, String time_value) {
+  File file;
+  String line;
+  
+  if (time_value == "day") {
+    file = SD.open(file_name);
+  } else if (time_value == "week") {
+    file = SD.open(file_name);
+  } else if (time_value == "month") {
+    file = SD.open(file_name);
+  } else {
+    return "404 not found";
+  }
+  
+  if (!file) return "";
+  while (file.available()) {
+    line = file.readStringUntil('\n');
+    if (!line.startsWith("AVG:")) {
+      SerialBT.print(line);
+    }
+  }
+
+  file.close();
+  return "multiple datas returned";
+}
+
 
 void loop() {
   //////////////////////////////////////////
@@ -367,7 +393,34 @@ void loop() {
         SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
       }  
 
-   } else {
+    } else if (cmd.startsWith("GET /all/day")) {
+      String date = cmd.substring(12);
+      String file_name = date + ".txt";
+      
+      String response = get_file_all_lines(file_name, "day");
+      if (response != "") {
+        Serial.println(response);
+      } else {
+        SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
+      }
+      
+    } else if (cmd.startsWith("GET /all/week")) {
+      String response = get_file_all_lines("/weeks_average.txt", "week");
+      if (response != "") {
+        Serial.println(response);
+      } else {
+        SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
+      }
+      
+    } else if (cmd.startsWith("GET /all/month")) {
+      String response = get_file_all_lines("/months_average.txt", "month");
+      if (response != "") {
+        Serial.println(response);
+      } else {
+        SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
+      }
+      
+    } else {
       SerialBT.println("404 Not Found");
     }
   }
