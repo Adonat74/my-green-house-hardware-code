@@ -1,6 +1,6 @@
 # my-green-house-hardware-code
 
-> This is the hardware code for the mygreen house captors
+> This is the hardware code for the my green house captors
 
 ## Routes(text) to request via bluetooth the datas stored inside the sd card.
 
