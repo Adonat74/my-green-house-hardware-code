@@ -21,7 +21,7 @@ retrieve the average values of a given week -> week 27 of the year.
 Return format :    "2025-W27 H:49.45 T:27.00 S:576"
 
 
-- "GET /avg/month/{month}" {month} format example = "06" :
+- "GET /avg/month/{month}" {month} format example = "2025-06" :
 
 retrieve the average values of a given month -> July
 Return format :    "2025-06 AVG H:49.45 T:27.00 S:576"
