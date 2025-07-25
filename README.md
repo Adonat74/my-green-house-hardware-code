@@ -7,7 +7,7 @@
 - "GET /last" :
 
 retrieve the last datas received and stored into the sd card.
-Return format :    "2025-07-22 16:32:11 H:49.45 T:27.00 S:576"
+Return format :    "16:32:11 H:49.45 T:27.00 S:576"
 
 - "GET /avg/day/{date}" {date} format example = "2025-07-03" :
 
