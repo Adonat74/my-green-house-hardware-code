@@ -15,13 +15,14 @@
 #define SD_CS 5 
 uint8_t cardType;
 
-//NRF24 
+// NRF24 
 RF24 radio(pinCE, pinCSN);
 const byte address[6] = "PIPE1";
 
 // WIFI
 const char* ssid     = "Xiaomi 11T Pro";
 const char* password = "00000000";
+
 
 // BLUETOOTH
 BluetoothSerial SerialBT;
@@ -62,17 +63,21 @@ void setup() {
   radio.openReadingPipe(0, address);
   radio.startListening();
 
+
   //////////////////////////////////////////
   /////////////// WIFI/TIME ////////////////
   //////////////////////////////////////////
+
+
   WiFi.begin(ssid, password);
+  // WiFi.begin(ssid.c_str(), password.c_str());
   configTime(3600*1, 3600*1, "pool.ntp.org");
   while (!getLocalTime(&timeinfo)) {
     delay(100);
   }
+  
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
-
   //////////////////////////////////////////
   //////////////// SD CARD /////////////////
   //////////////////////////////////////////
@@ -84,9 +89,17 @@ void setup() {
   //////////////////////////////////////////
   /////////////// BLUETOOTH ////////////////
   //////////////////////////////////////////
+  SerialBT.register_callback(callback);
   SerialBT.begin("my green house");
+  
 }
 
+// callback to signal if a bluetooth client is connected
+void callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param){
+  if(event == ESP_SPP_SRV_OPEN_EVT){
+    Serial.println("Client Connected");
+  }
+}
 
 
 ////////// CALCULATE AVERAGE //////////
@@ -275,13 +288,7 @@ String getLastLineOfTodayFile() {
   
   if (lastLine.length() == 0) return "No data found";
 
-  char date[16];
-  if (getLocalTime(&timeinfo)) {
-    strftime(date, sizeof(date), "%Y-%m-%d", &timeinfo);
-    return String(date) + " " + lastLine;
-  } else {
-    return lastLine;
-  }
+  return lastLine;
 }
 
 
@@ -327,7 +334,7 @@ String get_file_all_lines(String file_name, String time_value) {
   while (file.available()) {
     line = file.readStringUntil('\n');
     if (!line.startsWith("AVG:")) {
-      SerialBT.print(line);
+      SerialBT.println(line);
     }
   }
 
@@ -364,7 +371,7 @@ void loop() {
     if (cmd == "GET /last") {
       String last_line = getLastLineOfTodayFile();
       SerialBT.println(last_line);
-      
+      SerialBT.println(".");
     } else if (cmd.startsWith("GET /avg/day")) {
       String date = cmd.substring(12);
       String file_name = date + ".txt";
@@ -374,7 +381,7 @@ void loop() {
       } else {
         SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
       }
-      
+      SerialBT.println(".");
     } else if (cmd.startsWith("GET /avg/week")) {
       String week = cmd.substring(14);
       String week_avg = get_avg(week, "week");
@@ -383,6 +390,7 @@ void loop() {
       } else {
         SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
       }
+      SerialBT.println(".");
       
     } else if (cmd.startsWith("GET /avg/month")) {
       String month = cmd.substring(15);
@@ -392,6 +400,7 @@ void loop() {
       } else {
         SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
       }  
+      SerialBT.println(".");
 
     } else if (cmd.startsWith("GET /all/day")) {
       String date = cmd.substring(12);
@@ -403,6 +412,7 @@ void loop() {
       } else {
         SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
       }
+      SerialBT.println(".");
       
     } else if (cmd.startsWith("GET /all/week")) {
       String response = get_file_all_lines("/weeks_average.txt", "week");
@@ -411,6 +421,7 @@ void loop() {
       } else {
         SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
       }
+      SerialBT.println(".");
       
     } else if (cmd.startsWith("GET /all/month")) {
       String response = get_file_all_lines("/months_average.txt", "month");
@@ -419,9 +430,11 @@ void loop() {
       } else {
         SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
       }
+      SerialBT.println(".");
       
     } else {
       SerialBT.println("404 Not Found");
+      SerialBT.println(".");
     }
   }
 
@@ -468,7 +481,6 @@ void loop() {
       Serial.println("Failed to open file for appending");
     }
     file.close();
-
   }
   if (timeinfo.tm_wday != 0) avg_week_done = false;
 
