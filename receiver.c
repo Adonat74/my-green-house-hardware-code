@@ -140,7 +140,7 @@ String calculate_average(int days_number) {
   int avgS = totalS / validCount;
   
   char result[128];
-  snprintf(result, sizeof(result), "AVG: H:%.2f T:%.2f S:%d", avgH, avgT, avgS);
+  snprintf(result, sizeof(result), "H:%.2f T:%.2f S:%d", avgH, avgT, avgS);
   return String(result);
 }
 
