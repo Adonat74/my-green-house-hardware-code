@@ -26,7 +26,12 @@ const char* password = "00000000";
 
 // BLUETOOTH
 BluetoothSerial SerialBT;
+void callback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param);
 
+bool radio_ok = false;
+bool sd_ok = false;
+bool bt_ok = false;
+bool time_ok = false;
 
 // Data structure must match the sender!
 struct SensorData {
@@ -46,51 +51,102 @@ char week_average[64];
 char month_average[64];
 
 
-
 void setup() {
   Serial.begin(115200); 
+  delay(500);
+  Serial.println("\n\n=== boot ===");
+
+
+  //////////////////////////////////////////
+  /////////////// BLUETOOTH ////////////////
+  //////////////////////////////////////////
+  // --- Start Bluetooth first so the device is discoverable asap ---
+  Serial.println("Init Bluetooth...");
+  if (SerialBT.begin("my green house")) {
+    Serial.println("Bluetooth started!");
+    SerialBT.register_callback(callback);
+    bt_ok = true;
+  } else {
+    Serial.println("Bluetooth failed to start!");
+    bt_ok = false;
+  }
   
   //////////////////////////////////////////
   /////////////// NRF24L01 /////////////////
   //////////////////////////////////////////
   // to call radio.begin() in the condition is calling it and initiating radio.
-  if (!radio.begin()) {
-    Serial.println("NRF24L01 not detected!");
-    while (1);
+  Serial.println("Init nRF24...");
+  if (radio.begin()) {
+    radio_ok = true;
+    radio.setPALevel(RF24_PA_HIGH);
+    radio.setDataRate(RF24_250KBPS);
+    radio.openReadingPipe(0, address);
+    radio.startListening();
+    Serial.println("nRF24 initialized");
+  } else {
+    radio_ok = false;
+    Serial.println("NRF24L01 not detected! continuing without radio");
+    // DO NOT block here
   }
-  radio.setPALevel(RF24_PA_HIGH);
-  radio.setDataRate(RF24_250KBPS);
-  radio.openReadingPipe(0, address);
-  radio.startListening();
 
 
   //////////////////////////////////////////
   /////////////// WIFI/TIME ////////////////
   //////////////////////////////////////////
 
-
+  Serial.println("Trying WiFi to get time (timeout 15s)...");
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  // WiFi.begin(ssid.c_str(), password.c_str());
-  configTime(3600*1, 3600*1, "pool.ntp.org");
-  while (!getLocalTime(&timeinfo)) {
-    delay(100);
+
+  unsigned long t0 = millis();
+  const unsigned long WIFI_TIMEOUT = 15000UL;
+  while (millis() - t0 < WIFI_TIMEOUT && WiFi.status() != WL_CONNECTED) {
+    delay(200);
   }
-  
-  WiFi.disconnect(true);
-  WiFi.mode(WIFI_OFF);
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("WiFi connected, requesting NTP...");
+    // timezone offset seconds, dst seconds (adjust as needed)
+    configTime(3600, 0, "pool.ntp.org");
+    unsigned long t1 = millis();
+    const unsigned long NTP_TIMEOUT = 15000UL;
+    while (millis() - t1 < NTP_TIMEOUT) {
+      if (getLocalTime(&timeinfo)) break;
+      delay(200);
+    }
+    if (getLocalTime(&timeinfo)) {
+      time_ok = true;
+      Serial.println("Time obtained:");
+      Serial.println(asctime(&timeinfo));
+    } else {
+      time_ok = false;
+      Serial.println("Failed to obtain time from NTP (continuing without time)");
+    }
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+  } else {
+    time_ok = false;
+    Serial.println("WiFi failed to connect - skipping NTP");
+  }
   //////////////////////////////////////////
   //////////////// SD CARD /////////////////
   //////////////////////////////////////////
-  if (!SD.begin(SD_CS)) {
-    Serial.println("Card Mount Failed");
-    return;
+  Serial.println("Init SD card...");
+  if (SD.begin(SD_CS)) {
+    sd_ok = true;
+    Serial.println("SD card mounted");
+  } else {
+    sd_ok = false;
+    Serial.println("Card Mount Failed - continuing without SD");
   }
 
-  //////////////////////////////////////////
-  /////////////// BLUETOOTH ////////////////
-  //////////////////////////////////////////
-  SerialBT.register_callback(callback);
-  SerialBT.begin("my green house");
+  Serial.println("Setup complete. Features:");
+  Serial.printf("BT: %s, nRF24: %s, SD: %s, Time: %s\n",
+                bt_ok ? "OK" : "NO",
+                radio_ok ? "OK" : "NO",
+                sd_ok ? "OK" : "NO",
+                time_ok ? "OK" : "NO");
+
   
 }
 
@@ -347,30 +403,41 @@ void loop() {
   //////////////////////////////////////////
   /////////////// WIFI/TIME ////////////////
   //////////////////////////////////////////
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("Failed to obtain time");
-    return;
+  // update timeinfo if available
+  if (getLocalTime(&timeinfo)) {
+    time_ok = true;
+  } else {
+    // Don't return here! we want Bluetooth to keep working even without time.
+    time_ok = false;
   }
   
   //////////////////////////////////////////
   /////////////// NRF24L01 /////////////////
   //////////////////////////////////////////
-  if (radio.available()) {
-    SensorData received_data;
-    radio.read(&received_data, sizeof(received_data));
-    write_data_to_file(received_data, timeinfo);
+  if (radio_ok) {
+    if (radio.available()) {
+      SensorData received_data;
+      radio.read(&received_data, sizeof(received_data));
+      // will use timeinfo (may be epoch if no NTP) — OK
+      write_data_to_file(received_data, timeinfo);
+    }
   }
 
   //////////////////////////////////////////
   /////////////// BLUETOOTH ////////////////
   //////////////////////////////////////////
-  if (SerialBT.available()) {
+  if (bt_ok && SerialBT.available()) {
     String cmd = SerialBT.readStringUntil('\n');
     cmd.trim();
+
+    if (cmd.length() > 0) {
+      Serial.println(cmd);
+    }
 
     if (cmd == "GET /last") {
       String last_line = getLastLineOfTodayFile();
       SerialBT.println(last_line);
+      Serial.println(last_line);
       SerialBT.println(".");
     } else if (cmd.startsWith("GET /avg/day")) {
       String date = cmd.substring(12);
