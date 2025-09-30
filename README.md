@@ -40,3 +40,9 @@ retrieve all weeks average values
 - "GET /all/month" :
 
 retrieve all months average values
+
+- "GET /last/days/{days_number}" {date} format example = 30 :
+
+retrieve the avg datas of the last given number of days
+Return format multiple lines like :  "2025-06-03 AVG H:49.45 T:27.00 S:576"
+
