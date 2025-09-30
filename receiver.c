@@ -398,6 +398,30 @@ String get_file_all_lines(String file_name, String time_value) {
   return "multiple datas returned";
 }
 
+String list_last_days_avg(int days_number) {
+  String filenames[days_number];
+  get_last_n_dates(timeinfo, days_number, filenames);
+
+  String result = "";
+
+  for (int i = 0; i < days_number; i++) {
+    String avgLine = get_AVG_line_from_file(filenames[i]);
+
+    if (avgLine.indexOf("AVG:") == -1) continue;  // Ignore si pas valide
+
+    // Extraire la date à partir du nom du fichier
+    // filenames[i] est du style "/2025-07-03.txt"
+    String dateStr = filenames[i];
+    if (dateStr.startsWith("/")) dateStr.remove(0, 1);   // enlever le "/"
+    if (dateStr.endsWith(".txt")) dateStr.remove(dateStr.length() - 4);
+
+    // Ajouter à la liste → format : "2025-07-03,AVG:H:..T:..S:.."
+    result += dateStr + " " + avgLine + "\n";
+  }
+
+  return result;
+}
+
 
 void loop() {
   //////////////////////////////////////////
@@ -494,6 +518,19 @@ void loop() {
       String response = get_file_all_lines("/months_average.txt", "month");
       if (response != "") {
         Serial.println(response);
+      } else {
+        SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
+      }
+      SerialBT.println(".");
+
+    } else if (cmd.startsWith("GET /last/days")) {
+      String days_number_str = cmd.substring(15);
+      days_number_str.trim();
+      int days_number = days_number_str.toInt();
+      String response = list_last_days_avg(days_number);
+      Serial.println(response);
+      if (response != "") {
+        SerialBT.println(response);
       } else {
         SerialBT.println("Data not found please verify the date is correct or that the date is not too early and that data exist for that period of time");
       }
